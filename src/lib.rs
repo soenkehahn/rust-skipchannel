@@ -1,3 +1,23 @@
+//! This crate allows you to create a skipchannel and use it to send
+//! values between threads. When you read from a skipchannel you'll only
+//! ever get the last sent value, i.e. the channel skips all intermediate
+//! values.
+//!
+//! Here's an example:
+//!
+//! ```
+//! extern crate skipchannel;
+//!
+//! use skipchannel::skipchannel;
+//!
+//! let (writer, mut reader) = skipchannel(0);
+//! let thread = std::thread::spawn(move || {
+//!   std::thread::sleep(std::time::Duration::new(0, 100_000_000));
+//!   reader.last()
+//! });
+//! writer.write(1);
+//! assert_eq!(thread.join().unwrap(), 1);
+//! ```
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 #[derive(Debug)]
@@ -25,6 +45,8 @@ impl<T: Clone> Reader<T> {
     }
 }
 
+/// Creates a [Writer](struct.Writer.html) and [Reader](struct.Reader.html)
+/// for your skipchannel.
 pub fn skipchannel<T>(initial: T) -> (Writer<T>, Reader<T>) {
     let (sender, receiver) = channel();
     (

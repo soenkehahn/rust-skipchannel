@@ -1,5 +1,5 @@
 [package]
-name = "rust-skipchannel"
+name = "skipchannel"
 version = "0.1.0"
 authors = ["Sönke Hahn <soenkehahn@gmail.com>"]
 
