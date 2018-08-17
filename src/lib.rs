@@ -10,32 +10,32 @@
 //!
 //! use skipchannel::skipchannel;
 //!
-//! let (writer, mut reader) = skipchannel();
+//! let (sender, mut receiver) = skipchannel();
 //! let thread = std::thread::spawn(move || {
 //!   std::thread::sleep(std::time::Duration::new(0, 100_000_000));
-//!   reader.recv()
+//!   receiver.recv()
 //! });
-//! writer.write(1);
+//! sender.send(1);
 //! assert_eq!(thread.join().unwrap(), Some(1));
 //! ```
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc;
 
 #[derive(Debug)]
-pub struct Writer<T> {
-    sender: Sender<T>,
+pub struct Sender<T> {
+    sender: mpsc::Sender<T>,
 }
 
-impl<T> Writer<T> {
-    pub fn write(&self, t: T) {
+impl<T> Sender<T> {
+    pub fn send(&self, t: T) {
         let _ = self.sender.send(t);
     }
 }
 
-pub struct Reader<T> {
-    receiver: Receiver<T>,
+pub struct Receiver<T> {
+    receiver: mpsc::Receiver<T>,
 }
 
-impl<T> Reader<T> {
+impl<T> Receiver<T> {
     /// Returns the last sent value. Returns `None` if
     /// no value was sent since the last call to `recv`.
     pub fn recv(&mut self) -> Option<T> {
@@ -47,11 +47,11 @@ impl<T> Reader<T> {
     }
 }
 
-/// Creates a [Writer](struct.Writer.html) and [Reader](struct.Reader.html)
+/// Creates a [Sender](struct.Sender.html) and [Receiver](struct.Receiver.html)
 /// for your skipchannel.
-pub fn skipchannel<T>() -> (Writer<T>, Reader<T>) {
-    let (sender, receiver) = channel();
-    (Writer { sender }, Reader { receiver })
+pub fn skipchannel<T>() -> (Sender<T>, Receiver<T>) {
+    let (sender, receiver) = mpsc::channel();
+    (Sender { sender }, Receiver { receiver })
 }
 
 #[cfg(test)]
@@ -75,40 +75,40 @@ mod tests {
 
         #[test]
         fn allows_to_send_one_value() {
-            let (writer, mut reader) = skipchannel();
-            writer.write("foo");
-            assert_eq!(reader.recv(), Some("foo"));
+            let (sender, mut receiver) = skipchannel();
+            sender.send("foo");
+            assert_eq!(receiver.recv(), Some("foo"));
         }
 
         #[test]
         fn allows_to_send_values_between_threads() {
-            let (writer, mut reader) = skipchannel();
-            writer.write("foo");
-            let read_result = parallel(move || reader.recv());
+            let (sender, mut receiver) = skipchannel();
+            sender.send("foo");
+            let read_result = parallel(move || receiver.recv());
             assert_eq!(read_result, Some("foo"));
         }
 
         #[test]
         fn yields_none_when_nothing_is_sent() {
-            let (_writer, mut reader): (Writer<i32>, Reader<i32>) = skipchannel();
-            assert_eq!(reader.recv(), None);
+            let (_sender, mut receiver): (Sender<i32>, Receiver<i32>) = skipchannel();
+            assert_eq!(receiver.recv(), None);
         }
 
         #[test]
         fn skips_all_values_but_the_last() {
-            let (writer, mut reader) = skipchannel();
-            writer.write("foo");
-            writer.write("bar");
-            let read_result = parallel(move || reader.recv());
+            let (sender, mut receiver) = skipchannel();
+            sender.send("foo");
+            sender.send("bar");
+            let read_result = parallel(move || receiver.recv());
             assert_eq!(read_result, Some("bar"));
         }
 
         #[test]
         fn returns_none_when_a_sent_value_is_already_consumed() {
-            let (writer, mut reader) = skipchannel();
-            writer.write("foo");
-            reader.recv();
-            assert_eq!(reader.recv(), None);
+            let (sender, mut receiver) = skipchannel();
+            sender.send("foo");
+            receiver.recv();
+            assert_eq!(receiver.recv(), None);
         }
     }
 }
