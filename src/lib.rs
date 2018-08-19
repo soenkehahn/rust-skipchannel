@@ -1,3 +1,5 @@
+#![feature(box_syntax, box_patterns)]
+
 //! This crate allows you to create a skipchannel and use it to send
 //! values between threads. When you read from a skipchannel you'll only
 //! ever get the last sent value, i.e. the channel skips all intermediate
@@ -10,13 +12,13 @@
 //!
 //! use skipchannel::skipchannel;
 //!
-//! let (sender, mut receiver) = skipchannel();
+//! let (sender, receiver) = skipchannel();
 //! let thread = std::thread::spawn(move || {
 //!   std::thread::sleep(std::time::Duration::new(0, 100_000_000));
 //!   receiver.recv()
 //! });
 //! sender.send(1);
-//! assert_eq!(thread.join().unwrap(), Some(1));
+//! assert_eq!(thread.join().unwrap(), Box::new(Some(1)));
 //! ```
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::Arc;
@@ -28,7 +30,10 @@ pub struct Sender<T> {
 
 impl<T> Sender<T> {
     pub fn send(&self, t: T) {
-        self.ptr.swap(&mut Some(t), Ordering::Relaxed);
+        unsafe {
+            let old = self.ptr.swap(Box::into_raw(box Some(t)), Ordering::Relaxed);
+            Box::from_raw(old); // Re-box the pointer so it gets properly dropped
+        }
     }
 }
 
@@ -36,21 +41,22 @@ pub struct Receiver<T> {
     ptr: Arc<AtomicPtr<Option<T>>>,
 }
 
-impl<T: Clone> Receiver<T> {
+impl<T> Receiver<T> {
     /// Returns the last sent value. Returns `None` if
     /// no value was sent since the last call to `recv`.
-    pub fn recv(&self) -> Option<T> {
-        let a: &AtomicPtr<Option<T>> = &*self.ptr;
-        let r = a.swap(&mut None, Ordering::Relaxed);
-        let s: &mut Option<T> = unsafe { &mut *r };
-        s.clone()
+    pub fn recv(&self) -> Box<Option<T>> {
+        let r = self
+            .ptr
+            .as_ref()
+            .swap(Box::into_raw(box None), Ordering::Relaxed);
+        unsafe { Box::from_raw(r) }
     }
 }
 
 /// Creates a [Sender](struct.Sender.html) and [Receiver](struct.Receiver.html)
 /// for your skipchannel.
 pub fn skipchannel<T>() -> (Sender<T>, Receiver<T>) {
-    let ptr = Arc::new(AtomicPtr::new(&mut None));
+    let ptr = Arc::new(AtomicPtr::new(Box::into_raw(box None)));
     (Sender { ptr: ptr.clone() }, Receiver { ptr })
 }
 
@@ -77,7 +83,7 @@ mod tests {
         fn allows_to_send_one_value() {
             let (sender, receiver) = skipchannel();
             sender.send("foo");
-            assert_eq!(receiver.recv(), Some("foo"));
+            assert_eq!(receiver.recv(), box Some("foo"));
         }
 
         #[test]
@@ -85,13 +91,13 @@ mod tests {
             let (sender, receiver) = skipchannel();
             sender.send("foo");
             let read_result = parallel(move || receiver.recv());
-            assert_eq!(read_result, Some("foo"));
+            assert_eq!(read_result, box Some("foo"));
         }
 
         #[test]
         fn yields_none_when_nothing_is_sent() {
             let (_sender, receiver): (Sender<i32>, Receiver<i32>) = skipchannel();
-            assert_eq!(receiver.recv(), None);
+            assert_eq!(receiver.recv(), box None);
         }
 
         #[test]
@@ -100,7 +106,7 @@ mod tests {
             sender.send("foo");
             sender.send("bar");
             let read_result = parallel(move || receiver.recv());
-            assert_eq!(read_result, Some("bar"));
+            assert_eq!(read_result, box Some("bar"));
         }
 
         #[test]
@@ -108,7 +114,18 @@ mod tests {
             let (sender, receiver) = skipchannel();
             sender.send("foo");
             receiver.recv();
-            assert_eq!(receiver.recv(), None);
+            assert_eq!(receiver.recv(), box None);
+        }
+
+        #[test]
+        fn test_doctest() {
+            let (sender, receiver) = skipchannel();
+            let thread = std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::new(0, 100_000_000));
+                receiver.recv()
+            });
+            sender.send(1);
+            assert_eq!(thread.join().unwrap(), box Some(1));
         }
     }
 }
