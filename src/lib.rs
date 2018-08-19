@@ -18,32 +18,34 @@
 //! sender.send(1);
 //! assert_eq!(thread.join().unwrap(), Some(1));
 //! ```
+use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::mpsc;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Sender<T> {
     sender: mpsc::Sender<T>,
+    ptr: Arc<AtomicPtr<Option<T>>>,
 }
 
 impl<T> Sender<T> {
     pub fn send(&self, t: T) {
-        let _ = self.sender.send(t);
+        self.ptr.swap(&mut Some(t), Ordering::Relaxed);
     }
 }
 
 pub struct Receiver<T> {
-    receiver: mpsc::Receiver<T>,
+    ptr: Arc<AtomicPtr<Option<T>>>,
 }
 
-impl<T> Receiver<T> {
+impl<T: Clone> Receiver<T> {
     /// Returns the last sent value. Returns `None` if
     /// no value was sent since the last call to `recv`.
     pub fn recv(&self) -> Option<T> {
-        let mut result = None;
-        for t in self.receiver.try_iter() {
-            result = Some(t);
-        }
-        result
+        let a: &AtomicPtr<Option<T>> = &*self.ptr;
+        let r = a.swap(&mut None, Ordering::Relaxed);
+        let s: &mut Option<T> = unsafe { &mut *r };
+        s.clone()
     }
 }
 
@@ -51,7 +53,14 @@ impl<T> Receiver<T> {
 /// for your skipchannel.
 pub fn skipchannel<T>() -> (Sender<T>, Receiver<T>) {
     let (sender, receiver) = mpsc::channel();
-    (Sender { sender }, Receiver { receiver })
+    let ptr = Arc::new(AtomicPtr::new(&mut None));
+    (
+        Sender {
+            sender,
+            ptr: ptr.clone(),
+        },
+        Receiver { ptr },
+    )
 }
 
 #[cfg(test)]
