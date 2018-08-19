@@ -19,12 +19,10 @@
 //! assert_eq!(thread.join().unwrap(), Some(1));
 //! ```
 use std::sync::atomic::{AtomicPtr, Ordering};
-use std::sync::mpsc;
 use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Sender<T> {
-    sender: mpsc::Sender<T>,
     ptr: Arc<AtomicPtr<Option<T>>>,
 }
 
@@ -52,15 +50,8 @@ impl<T: Clone> Receiver<T> {
 /// Creates a [Sender](struct.Sender.html) and [Receiver](struct.Receiver.html)
 /// for your skipchannel.
 pub fn skipchannel<T>() -> (Sender<T>, Receiver<T>) {
-    let (sender, receiver) = mpsc::channel();
     let ptr = Arc::new(AtomicPtr::new(&mut None));
-    (
-        Sender {
-            sender,
-            ptr: ptr.clone(),
-        },
-        Receiver { ptr },
-    )
+    (Sender { ptr: ptr.clone() }, Receiver { ptr })
 }
 
 #[cfg(test)]
