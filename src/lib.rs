@@ -1,5 +1,3 @@
-#![feature(box_syntax, box_patterns)]
-
 //! This crate allows you to create a skipchannel and use it to send
 //! values between threads. When you read from a skipchannel you'll only
 //! ever get the last sent value, i.e. the channel skips all intermediate
@@ -31,7 +29,7 @@ pub struct Sender<T> {
 impl<T> Sender<T> {
     pub fn send(&self, t: T) {
         unsafe {
-            let old = self.ptr.swap(Box::into_raw(box Some(t)), Ordering::Relaxed);
+            let old = self.ptr.swap(Box::into_raw(Box::new(Some(t))), Ordering::Relaxed);
             Box::from_raw(old); // Re-box the pointer so it gets properly dropped
         }
     }
@@ -48,7 +46,7 @@ impl<T> Receiver<T> {
         let r = self
             .ptr
             .as_ref()
-            .swap(Box::into_raw(box None), Ordering::Relaxed);
+            .swap(Box::into_raw(Box::new(None)), Ordering::Relaxed);
         unsafe { Box::from_raw(r) }
     }
 }
@@ -56,7 +54,7 @@ impl<T> Receiver<T> {
 /// Creates a [Sender](struct.Sender.html) and [Receiver](struct.Receiver.html)
 /// for your skipchannel.
 pub fn skipchannel<T>() -> (Sender<T>, Receiver<T>) {
-    let ptr = Arc::new(AtomicPtr::new(Box::into_raw(box None)));
+    let ptr = Arc::new(AtomicPtr::new(Box::into_raw(Box::new(None))));
     (Sender { ptr: ptr.clone() }, Receiver { ptr })
 }
 
@@ -83,7 +81,7 @@ mod tests {
         fn allows_to_send_one_value() {
             let (sender, receiver) = skipchannel();
             sender.send("foo");
-            assert_eq!(receiver.recv(), box Some("foo"));
+            assert_eq!(receiver.recv(), Box::new(Some("foo")));
         }
 
         #[test]
@@ -91,13 +89,13 @@ mod tests {
             let (sender, receiver) = skipchannel();
             sender.send("foo");
             let read_result = parallel(move || receiver.recv());
-            assert_eq!(read_result, box Some("foo"));
+            assert_eq!(read_result, Box::new(Some("foo")));
         }
 
         #[test]
         fn yields_none_when_nothing_is_sent() {
             let (_sender, receiver): (Sender<i32>, Receiver<i32>) = skipchannel();
-            assert_eq!(receiver.recv(), box None);
+            assert_eq!(receiver.recv(), Box::new(None));
         }
 
         #[test]
@@ -106,7 +104,7 @@ mod tests {
             sender.send("foo");
             sender.send("bar");
             let read_result = parallel(move || receiver.recv());
-            assert_eq!(read_result, box Some("bar"));
+            assert_eq!(read_result, Box::new(Some("bar")));
         }
 
         #[test]
@@ -114,7 +112,7 @@ mod tests {
             let (sender, receiver) = skipchannel();
             sender.send("foo");
             receiver.recv();
-            assert_eq!(receiver.recv(), box None);
+            assert_eq!(receiver.recv(), Box::new(None));
         }
 
         #[test]
@@ -125,7 +123,7 @@ mod tests {
                 receiver.recv()
             });
             sender.send(1);
-            assert_eq!(thread.join().unwrap(), box Some(1));
+            assert_eq!(thread.join().unwrap(), Box::new(Some(1)));
         }
     }
 }
