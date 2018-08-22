@@ -24,15 +24,15 @@ use std::sync::Arc;
 
 static mut EMPTY: u8 = 42;
 
-fn empty<T>() -> *mut T {
-    unsafe { mem::transmute::<*mut u8, *mut T>(&mut EMPTY) }
+unsafe fn empty<T>() -> *mut T {
+    mem::transmute::<*mut u8, *mut T>(&mut EMPTY)
 }
 
-fn to_option<T>(ptr: *mut T) -> Option<Box<T>> {
+unsafe fn to_option<T>(ptr: *mut T) -> Option<Box<T>> {
     if ptr == empty() {
         None
     } else {
-        unsafe { Some(Box::from_raw(ptr)) }
+        Some(Box::from_raw(ptr))
     }
 }
 
@@ -44,7 +44,9 @@ pub struct Sender<T> {
 impl<T> Sender<T> {
     pub fn send(&self, t: T) {
         // Re-box the pointer so it gets properly dropped
-        to_option(self.ptr.swap(Box::into_raw(Box::new(t)), Ordering::Relaxed));
+        unsafe {
+            to_option(self.ptr.swap(Box::into_raw(Box::new(t)), Ordering::Relaxed));
+        }
     }
 }
 
@@ -56,14 +58,14 @@ impl<T> Receiver<T> {
     /// Returns the last sent value. Returns `None` if
     /// no value was sent since the last call to `recv`.
     pub fn recv(&self) -> Option<Box<T>> {
-        to_option(self.ptr.as_ref().swap(empty(), Ordering::Relaxed))
+        unsafe { to_option(self.ptr.as_ref().swap(empty(), Ordering::Relaxed)) }
     }
 }
 
 /// Creates a [Sender](struct.Sender.html) and [Receiver](struct.Receiver.html)
 /// for your skipchannel.
 pub fn skipchannel<T>() -> (Sender<T>, Receiver<T>) {
-    let ptr = Arc::new(AtomicPtr::new(empty()));
+    let ptr = Arc::new(AtomicPtr::new(unsafe { empty() }));
     (Sender { ptr: ptr.clone() }, Receiver { ptr })
 }
 
