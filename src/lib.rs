@@ -16,45 +16,56 @@
 //!   receiver.recv()
 //! });
 //! sender.send(1);
-//! assert_eq!(thread.join().unwrap(), Box::new(Some(1)));
+//! assert_eq!(thread.join().unwrap(), Some(Box::new(1)));
 //! ```
+use std::mem;
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::Arc;
 
+static mut EMPTY: u8 = 42;
+
+unsafe fn empty<T>() -> *mut T {
+    mem::transmute::<*mut u8, *mut T>(&mut EMPTY)
+}
+
+unsafe fn to_option<T>(ptr: *mut T) -> Option<Box<T>> {
+    if ptr == empty() {
+        None
+    } else {
+        Some(Box::from_raw(ptr))
+    }
+}
+
 #[derive(Debug)]
 pub struct Sender<T> {
-    ptr: Arc<AtomicPtr<Option<T>>>,
+    ptr: Arc<AtomicPtr<T>>,
 }
 
 impl<T> Sender<T> {
     pub fn send(&self, t: T) {
+        // Re-box the pointer so it gets properly dropped
         unsafe {
-            let old = self.ptr.swap(Box::into_raw(Box::new(Some(t))), Ordering::Relaxed);
-            Box::from_raw(old); // Re-box the pointer so it gets properly dropped
+            to_option(self.ptr.swap(Box::into_raw(Box::new(t)), Ordering::Relaxed));
         }
     }
 }
 
 pub struct Receiver<T> {
-    ptr: Arc<AtomicPtr<Option<T>>>,
+    ptr: Arc<AtomicPtr<T>>,
 }
 
 impl<T> Receiver<T> {
     /// Returns the last sent value. Returns `None` if
     /// no value was sent since the last call to `recv`.
-    pub fn recv(&self) -> Box<Option<T>> {
-        let r = self
-            .ptr
-            .as_ref()
-            .swap(Box::into_raw(Box::new(None)), Ordering::Relaxed);
-        unsafe { Box::from_raw(r) }
+    pub fn recv(&self) -> Option<Box<T>> {
+        unsafe { to_option(self.ptr.as_ref().swap(empty(), Ordering::Relaxed)) }
     }
 }
 
 /// Creates a [Sender](struct.Sender.html) and [Receiver](struct.Receiver.html)
 /// for your skipchannel.
 pub fn skipchannel<T>() -> (Sender<T>, Receiver<T>) {
-    let ptr = Arc::new(AtomicPtr::new(Box::into_raw(Box::new(None))));
+    let ptr = Arc::new(AtomicPtr::new(unsafe { empty() }));
     (Sender { ptr: ptr.clone() }, Receiver { ptr })
 }
 
@@ -81,7 +92,7 @@ mod tests {
         fn allows_to_send_one_value() {
             let (sender, receiver) = skipchannel();
             sender.send("foo");
-            assert_eq!(receiver.recv(), Box::new(Some("foo")));
+            assert_eq!(receiver.recv(), Some(Box::new("foo")));
         }
 
         #[test]
@@ -89,13 +100,13 @@ mod tests {
             let (sender, receiver) = skipchannel();
             sender.send("foo");
             let read_result = parallel(move || receiver.recv());
-            assert_eq!(read_result, Box::new(Some("foo")));
+            assert_eq!(read_result, Some(Box::new("foo")));
         }
 
         #[test]
         fn yields_none_when_nothing_is_sent() {
             let (_sender, receiver): (Sender<i32>, Receiver<i32>) = skipchannel();
-            assert_eq!(receiver.recv(), Box::new(None));
+            assert_eq!(receiver.recv(), None);
         }
 
         #[test]
@@ -104,7 +115,7 @@ mod tests {
             sender.send("foo");
             sender.send("bar");
             let read_result = parallel(move || receiver.recv());
-            assert_eq!(read_result, Box::new(Some("bar")));
+            assert_eq!(read_result, Some(Box::new("bar")));
         }
 
         #[test]
@@ -112,7 +123,7 @@ mod tests {
             let (sender, receiver) = skipchannel();
             sender.send("foo");
             receiver.recv();
-            assert_eq!(receiver.recv(), Box::new(None));
+            assert_eq!(receiver.recv(), None);
         }
 
         #[test]
@@ -123,7 +134,7 @@ mod tests {
                 receiver.recv()
             });
             sender.send(1);
-            assert_eq!(thread.join().unwrap(), Box::new(Some(1)));
+            assert_eq!(thread.join().unwrap(), Some(Box::new(1)));
         }
     }
 }
