@@ -36,7 +36,7 @@ impl<T> AtomicPtrWithDrop<T> {
 
 impl<T> Drop for AtomicPtrWithDrop<T> {
     fn drop(&mut self) {
-        let raw = self.inner.load(Ordering::Relaxed);
+        let raw = self.inner.load(Ordering::SeqCst);
         unsafe {
             Box::from_raw(raw);
         }
@@ -53,7 +53,7 @@ impl<T> Sender<T> {
         let old = self
             .ptr
             .inner
-            .swap(Box::into_raw(Box::new(Some(t))), Ordering::Relaxed);
+            .swap(Box::into_raw(Box::new(Some(t))), Ordering::SeqCst);
         unsafe {
             Box::from_raw(old);
         }
@@ -71,7 +71,7 @@ impl<T> Receiver<T> {
         let r = self
             .ptr
             .inner
-            .swap(Box::into_raw(Box::new(None)), Ordering::Relaxed);
+            .swap(Box::into_raw(Box::new(None)), Ordering::SeqCst);
         *(unsafe { Box::from_raw(r) })
     }
 }
