@@ -22,23 +22,46 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::Arc;
 
 #[derive(Debug)]
+struct AtomicPtrWithDrop<T> {
+    inner: AtomicPtr<T>,
+}
+
+impl<T> AtomicPtrWithDrop<T> {
+    fn new(t: *mut T) -> AtomicPtrWithDrop<T> {
+        AtomicPtrWithDrop {
+            inner: AtomicPtr::new(t),
+        }
+    }
+}
+
+impl<T> Drop for AtomicPtrWithDrop<T> {
+    fn drop(&mut self) {
+        let raw = self.inner.load(Ordering::Relaxed);
+        unsafe {
+            Box::from_raw(raw);
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Sender<T> {
-    ptr: Arc<AtomicPtr<Option<T>>>,
+    ptr: Arc<AtomicPtrWithDrop<Option<T>>>,
 }
 
 impl<T> Sender<T> {
     pub fn send(&self, t: T) {
         let old = self
             .ptr
+            .inner
             .swap(Box::into_raw(Box::new(Some(t))), Ordering::Relaxed);
         unsafe {
-            Box::from_raw(old); // Re-box the pointer so it gets properly dropped
+            Box::from_raw(old);
         }
     }
 }
 
 pub struct Receiver<T> {
-    ptr: Arc<AtomicPtr<Option<T>>>,
+    ptr: Arc<AtomicPtrWithDrop<Option<T>>>,
 }
 
 impl<T> Receiver<T> {
@@ -47,7 +70,7 @@ impl<T> Receiver<T> {
     pub fn recv(&self) -> Option<T> {
         let r = self
             .ptr
-            .as_ref()
+            .inner
             .swap(Box::into_raw(Box::new(None)), Ordering::Relaxed);
         *(unsafe { Box::from_raw(r) })
     }
@@ -56,7 +79,7 @@ impl<T> Receiver<T> {
 /// Creates a [Sender](struct.Sender.html) and [Receiver](struct.Receiver.html)
 /// for your skipchannel.
 pub fn skipchannel<T>() -> (Sender<T>, Receiver<T>) {
-    let ptr = Arc::new(AtomicPtr::new(Box::into_raw(Box::new(None))));
+    let ptr = Arc::new(AtomicPtrWithDrop::new(Box::into_raw(Box::new(None))));
     (Sender { ptr: ptr.clone() }, Receiver { ptr })
 }
 
@@ -115,6 +138,90 @@ mod tests {
             sender.send("foo");
             receiver.recv();
             assert_eq!(receiver.recv(), None);
+        }
+
+        mod drop {
+            use super::*;
+            use std::sync::atomic::AtomicBool;
+
+            struct DropMock {
+                was_dropped: Arc<AtomicBool>,
+            }
+
+            impl DropMock {
+                fn new() -> (DropMock, Arc<AtomicBool>) {
+                    let arc = Arc::new(AtomicBool::new(false));
+                    (
+                        DropMock {
+                            was_dropped: arc.clone(),
+                        },
+                        arc,
+                    )
+                }
+            }
+
+            impl<'a> Drop for DropMock {
+                fn drop(&mut self) {
+                    self.was_dropped.store(true, Ordering::SeqCst);
+                }
+            }
+
+            #[test]
+            fn drops_unconsumed_values_on_subsequent_sends() {
+                let (first, first_was_dropped) = DropMock::new();
+                let (sender, _receiver) = skipchannel();
+                sender.send(Some(first));
+                sender.send(None);
+                assert_eq!(first_was_dropped.load(Ordering::SeqCst), true);
+            }
+
+            #[test]
+            fn value_is_dropped_when_sender_and_receiver_are_dropped() {
+                let (value, value_was_dropped) = DropMock::new();
+                {
+                    let (sender, _receiver) = skipchannel();
+                    sender.send(value);
+                }
+                assert_eq!(value_was_dropped.load(Ordering::SeqCst), true);
+            }
+
+            #[test]
+            fn does_not_drop_values_when_just_the_receiver_is_dropped() {
+                let (value, value_was_dropped) = DropMock::new();
+                let (sender, receiver) = skipchannel();
+                sender.send(value);
+                std::mem::drop(receiver);
+                assert_eq!(
+                    value_was_dropped.load(Ordering::SeqCst),
+                    false,
+                    "value dropped although sender is still alive"
+                );
+                std::mem::drop(sender);
+                assert_eq!(
+                    value_was_dropped.load(Ordering::SeqCst),
+                    true,
+                    "value not dropped"
+                );
+            }
+
+            #[test]
+            fn does_not_drop_values_when_just_the_sender_is_dropped() {
+                let (value, value_was_dropped) = DropMock::new();
+                let (sender, receiver) = skipchannel();
+                sender.send(value);
+                std::mem::drop(sender);
+                assert_eq!(
+                    value_was_dropped.load(Ordering::SeqCst),
+                    false,
+                    "value dropped although receiver is still alive"
+                );
+                std::mem::drop(receiver);
+                assert_eq!(
+                    value_was_dropped.load(Ordering::SeqCst),
+                    true,
+                    "value not dropped"
+                );
+            }
         }
 
         #[test]
