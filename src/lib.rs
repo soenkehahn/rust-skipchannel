@@ -36,9 +36,9 @@ impl<T> AtomicPtrWithDrop<T> {
 
 impl<T> Drop for AtomicPtrWithDrop<T> {
     fn drop(&mut self) {
-        let raw = self.inner.load(Ordering::SeqCst);
+        let raw_ptr = self.inner.load(Ordering::SeqCst);
         unsafe {
-            Box::from_raw(raw);
+            Box::from_raw(raw_ptr);
         }
     }
 }
@@ -68,11 +68,11 @@ impl<T> Receiver<T> {
     /// Returns the last sent value. Returns `None` if
     /// no value was sent since the last call to `recv`.
     pub fn recv(&self) -> Option<T> {
-        let r = self
+        let raw_ptr = self
             .ptr
             .inner
             .swap(Box::into_raw(Box::new(None)), Ordering::SeqCst);
-        *(unsafe { Box::from_raw(r) })
+        *(unsafe { Box::from_raw(raw_ptr) })
     }
 }
 
