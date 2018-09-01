@@ -223,16 +223,5 @@ mod tests {
                 );
             }
         }
-
-        #[test]
-        fn test_doctest() {
-            let (sender, receiver) = skipchannel();
-            let thread = std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::new(0, 100_000_000));
-                receiver.recv()
-            });
-            sender.send(1);
-            assert_eq!(thread.join().unwrap(), Some(1));
-        }
     }
 }
