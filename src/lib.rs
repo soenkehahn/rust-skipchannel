@@ -160,7 +160,7 @@ mod tests {
                 }
             }
 
-            impl<'a> Drop for DropMock {
+            impl Drop for DropMock {
                 fn drop(&mut self) {
                     self.was_dropped.store(true, Ordering::SeqCst);
                 }
