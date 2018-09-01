@@ -16,7 +16,7 @@
 //!   receiver.recv()
 //! });
 //! sender.send(1);
-//! assert_eq!(thread.join().unwrap(), Box::new(Some(1)));
+//! assert_eq!(thread.join().unwrap(), Some(1));
 //! ```
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::Arc;
@@ -28,8 +28,10 @@ pub struct Sender<T> {
 
 impl<T> Sender<T> {
     pub fn send(&self, t: T) {
+        let old = self
+            .ptr
+            .swap(Box::into_raw(Box::new(Some(t))), Ordering::Relaxed);
         unsafe {
-            let old = self.ptr.swap(Box::into_raw(Box::new(Some(t))), Ordering::Relaxed);
             Box::from_raw(old); // Re-box the pointer so it gets properly dropped
         }
     }
@@ -42,12 +44,13 @@ pub struct Receiver<T> {
 impl<T> Receiver<T> {
     /// Returns the last sent value. Returns `None` if
     /// no value was sent since the last call to `recv`.
-    pub fn recv(&self) -> Box<Option<T>> {
+    pub fn recv(&self) -> Option<T> {
         let r = self
             .ptr
             .as_ref()
             .swap(Box::into_raw(Box::new(None)), Ordering::Relaxed);
-        unsafe { Box::from_raw(r) }
+
+        *(unsafe { Box::from_raw(r) })
     }
 }
 
@@ -81,7 +84,7 @@ mod tests {
         fn allows_to_send_one_value() {
             let (sender, receiver) = skipchannel();
             sender.send("foo");
-            assert_eq!(receiver.recv(), Box::new(Some("foo")));
+            assert_eq!(receiver.recv(), Some("foo"));
         }
 
         #[test]
@@ -89,13 +92,13 @@ mod tests {
             let (sender, receiver) = skipchannel();
             sender.send("foo");
             let read_result = parallel(move || receiver.recv());
-            assert_eq!(read_result, Box::new(Some("foo")));
+            assert_eq!(read_result, Some("foo"));
         }
 
         #[test]
         fn yields_none_when_nothing_is_sent() {
             let (_sender, receiver): (Sender<i32>, Receiver<i32>) = skipchannel();
-            assert_eq!(receiver.recv(), Box::new(None));
+            assert_eq!(receiver.recv(), None);
         }
 
         #[test]
@@ -104,7 +107,7 @@ mod tests {
             sender.send("foo");
             sender.send("bar");
             let read_result = parallel(move || receiver.recv());
-            assert_eq!(read_result, Box::new(Some("bar")));
+            assert_eq!(read_result, Some("bar"));
         }
 
         #[test]
@@ -112,7 +115,7 @@ mod tests {
             let (sender, receiver) = skipchannel();
             sender.send("foo");
             receiver.recv();
-            assert_eq!(receiver.recv(), Box::new(None));
+            assert_eq!(receiver.recv(), None);
         }
 
         #[test]
@@ -123,7 +126,7 @@ mod tests {
                 receiver.recv()
             });
             sender.send(1);
-            assert_eq!(thread.join().unwrap(), Box::new(Some(1)));
+            assert_eq!(thread.join().unwrap(), Some(1));
         }
     }
 }
