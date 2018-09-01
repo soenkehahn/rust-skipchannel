@@ -28,8 +28,10 @@ pub struct Sender<T> {
 
 impl<T> Sender<T> {
     pub fn send(&self, t: T) {
+        let old = self
+            .ptr
+            .swap(Box::into_raw(Box::new(Some(t))), Ordering::Relaxed);
         unsafe {
-            let old = self.ptr.swap(Box::into_raw(Box::new(Some(t))), Ordering::Relaxed);
             Box::from_raw(old); // Re-box the pointer so it gets properly dropped
         }
     }
