@@ -1,6 +1,4 @@
 [package]
 name = "skipchannel"
-version = "0.1.0"
-authors = ["Sönke Hahn <soenkehahn@gmail.com>"]
-
-[dependencies]
+version = "1.0.0"
+authors = ["Jon Distad <jon.distad@gmail.com>", "Sönke Hahn <soenkehahn@gmail.com>"]
