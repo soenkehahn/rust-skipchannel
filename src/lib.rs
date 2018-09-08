@@ -1,7 +1,9 @@
 //! This crate allows you to create a skipchannel and use it to send
 //! values between threads. When you read from a skipchannel you'll only
 //! ever get the last sent value, i.e. the channel skips all intermediate
-//! values.
+//! values. (The idea for skipchannels comes from the
+//! [Concurrent Haskell](https://www.microsoft.com/en-us/research/wp-content/uploads/1996/01/concurrent-haskell.pdf)
+//! paper.)
 //!
 //! Here's an example:
 //!
