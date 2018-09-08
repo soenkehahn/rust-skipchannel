@@ -18,7 +18,8 @@
 //!   receiver.recv()
 //! });
 //! sender.send(1);
-//! assert_eq!(thread.join().unwrap(), Some(1));
+//! sender.send(2);
+//! assert_eq!(thread.join().unwrap(), Some(2));
 //! ```
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::Arc;
