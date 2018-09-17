@@ -46,7 +46,7 @@ impl<T> Drop for AtomicPtrWithDrop<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Sender<T: Send> {
     ptr: Arc<AtomicPtrWithDrop<Option<T>>>,
 }
@@ -63,6 +63,7 @@ impl<T: Send> Sender<T> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Receiver<T: Send> {
     ptr: Arc<AtomicPtrWithDrop<Option<T>>>,
 }
