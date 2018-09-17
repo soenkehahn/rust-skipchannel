@@ -47,11 +47,11 @@ impl<T> Drop for AtomicPtrWithDrop<T> {
 }
 
 #[derive(Debug)]
-pub struct Sender<T> {
+pub struct Sender<T: Send> {
     ptr: Arc<AtomicPtrWithDrop<Option<T>>>,
 }
 
-impl<T> Sender<T> {
+impl<T: Send> Sender<T> {
     pub fn send(&self, t: T) {
         let old = self
             .ptr
@@ -63,11 +63,11 @@ impl<T> Sender<T> {
     }
 }
 
-pub struct Receiver<T> {
+pub struct Receiver<T: Send> {
     ptr: Arc<AtomicPtrWithDrop<Option<T>>>,
 }
 
-impl<T> Receiver<T> {
+impl<T: Send> Receiver<T> {
     /// Returns the last sent value. Returns `None` if
     /// no value was sent since the last call to `recv`.
     pub fn recv(&self) -> Option<T> {
@@ -81,7 +81,7 @@ impl<T> Receiver<T> {
 
 /// Creates a [Sender](struct.Sender.html) and [Receiver](struct.Receiver.html)
 /// for your skipchannel.
-pub fn skipchannel<T>() -> (Sender<T>, Receiver<T>) {
+pub fn skipchannel<T: Send>() -> (Sender<T>, Receiver<T>) {
     let ptr = Arc::new(AtomicPtrWithDrop::new(Box::into_raw(Box::new(None))));
     (Sender { ptr: ptr.clone() }, Receiver { ptr })
 }
