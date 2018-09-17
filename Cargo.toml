@@ -7,4 +7,3 @@ repository = "https://github.com/soenkehahn/rust-skipchannel"
 keywords = ["channel", "threads", "atomic"]
 categories = ["concurrency"]
 license = "BSD-3-Clause"
-license-file = "LICENSE"
