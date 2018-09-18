@@ -1,6 +1,6 @@
 [package]
 name = "skipchannel"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Jon Distad <jon.distad@gmail.com>", "Sönke Hahn <soenkehahn@gmail.com>"]
 description = "skipchannels allow to communicate between threads, but always skip to the last sent value"
 repository = "https://github.com/soenkehahn/rust-skipchannel"
