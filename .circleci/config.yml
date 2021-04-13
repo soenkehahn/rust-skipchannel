@@ -1,9 +1,12 @@
-version: 2
+version: 2.1
 
 jobs:
   build:
+    parameters:
+      image:
+        type: string
     docker:
-      - image: rust:1.45.0-stretch
+      - image: << parameters.image >>
 
     steps:
       - checkout
@@ -18,3 +21,32 @@ jobs:
       - run:
           name: build
           command: cargo build
+
+workflows:
+  all-tests:
+    jobs:
+      - build:
+          matrix:
+            parameters:
+              image:
+                - rust:1.31
+                - rust:1.32
+                - rust:1.33
+                - rust:1.34
+                - rust:1.35
+                - rust:1.36
+                - rust:1.37
+                - rust:1.38
+                - rust:1.39
+                - rust:1.40
+                - rust:1.41
+                - rust:1.42
+                - rust:1.43
+                - rust:1.44
+                - rust:1.45
+                - rust:1.46
+                - rust:1.47
+                - rust:1.48
+                - rust:1.49
+                - rust:1.50
+                - rust:1.51
