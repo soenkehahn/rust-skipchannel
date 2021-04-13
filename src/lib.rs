@@ -93,6 +93,7 @@ mod tests {
 
     mod skip_channel {
         use super::*;
+        use std::panic::panic_any;
 
         fn parallel<F, T>(f: F) -> T
         where
@@ -102,7 +103,7 @@ mod tests {
             let f_handle = std::thread::spawn(f);
             match f_handle.join() {
                 Ok(t) => t,
-                Err(err) => panic!(err),
+                Err(err) => panic_any(err),
             }
         }
 
