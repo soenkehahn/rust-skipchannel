@@ -21,6 +21,11 @@
 //! sender.send(2);
 //! assert_eq!(thread.join().unwrap(), Some(2));
 //! ```
+//!
+//! Note that both [`Sender::send`] and [`Receiver::recv`] are non-blocking.
+//! I.e. they don't use a lock that the other end of the channel could be
+//! holding when accessing the channel. Instead they use [`AtomicPtr`].
+
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::Arc;
 
